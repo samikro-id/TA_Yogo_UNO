@@ -10,6 +10,22 @@
  */
 
 /**
+ * @brief Relay
+ */
+#define RELAY_1_Pin     14
+#define RELAY_2_Pin     15
+#define RELAY_3_Pin     16
+#define RELAY_4_Pin     17
+
+#define RELAY_CHARGE_SUPPLY     RELAY_1_Pin
+#define RELAY_CHARGE_BATT       RELAY_2_Pin
+#define RELAY_BATT              RELAY_3_Pin
+#define RELAY_LOAD              RELAY_4_Pin
+
+#define RELAY_ON                LOW
+#define RELAY_OFF               HIGH
+
+/**
  * @brief LCD 16x2 
  * @library LiquidCrystal by Arduino Vesion 1.0.7
  * LCD RS pin to digital pin 12
@@ -30,6 +46,7 @@
 #define LCD_D5_Pin  8
 #define LCD_D6_Pin  7
 #define LCD_D7_Pin  6
+#define LCD_BL_PIN  5
 LiquidCrystal lcd(LCD_RS_Pin, LCD_EN_Pin, LCD_D4_Pin, LCD_D5_Pin, LCD_D6_Pin, LCD_D7_Pin);
 
 /**
@@ -68,11 +85,14 @@ void setup(){
     pinMode(LCD_RW_Pin, OUTPUT);
     digitalWrite(LCD_RW_Pin, LOW);
 
+    pinMode(LCD_BL_PIN, OUTPUT);
+    digitalWrite(LCD_BL_PIN, LOW);
+
     lcd.begin(16,2);
     lcd.clear();
     lcd.setCursor(0,0);
     lcd.print("Tugas Akhir");
-    lcd.setCursor(1,0);
+    lcd.setCursor(0,1);
     lcd.print("Yogo");
 
     /* Energy Meter INA219 Setup */
@@ -80,8 +100,51 @@ void setup(){
 
     /* Temperature DS18B20 Setup */
     temperature.begin();
+
+    /* Relay Setup */
+    pinMode(RELAY_1_Pin, OUTPUT);
+    pinMode(RELAY_2_Pin, OUTPUT);
+    pinMode(RELAY_3_Pin, OUTPUT);
+    pinMode(RELAY_4_Pin, OUTPUT);
+
+    digitalWrite(RELAY_1_Pin, RELAY_OFF);
+    digitalWrite(RELAY_2_Pin, RELAY_OFF);
+    digitalWrite(RELAY_3_Pin, RELAY_OFF);
+    digitalWrite(RELAY_4_Pin, RELAY_OFF);
+
+    delay(5000);
 }
 
 void loop(){
+    digitalWrite(RELAY_1_Pin, RELAY_ON);
+    digitalWrite(RELAY_2_Pin, RELAY_OFF);
+    digitalWrite(RELAY_3_Pin, RELAY_OFF);
+    digitalWrite(RELAY_4_Pin, RELAY_OFF);
+    float busVoltage = 0;
+    busVoltage = sensor219.getBusVoltage_V();
+
     
+    delay(1000);
+
+    digitalWrite(RELAY_1_Pin, RELAY_OFF);
+    digitalWrite(RELAY_2_Pin, RELAY_ON);
+    digitalWrite(RELAY_3_Pin, RELAY_OFF);
+    digitalWrite(RELAY_4_Pin, RELAY_OFF);
+    float current = 0; // Measure in milli amps
+    busVoltage = sensor219.getBusVoltage_V();
+    delay(1000);
+
+    digitalWrite(RELAY_1_Pin, RELAY_OFF);
+    digitalWrite(RELAY_2_Pin, RELAY_OFF);
+    digitalWrite(RELAY_3_Pin, RELAY_ON);
+    digitalWrite(RELAY_4_Pin, RELAY_OFF);
+    float power = 0;
+    power = busVoltage * (current/1000); // Calculate the Power
+    delay(1000);
+
+    digitalWrite(RELAY_1_Pin, RELAY_OFF);
+    digitalWrite(RELAY_2_Pin, RELAY_OFF);
+    digitalWrite(RELAY_3_Pin, RELAY_OFF);
+    digitalWrite(RELAY_4_Pin, RELAY_ON);
+    delay(1000);
 }
