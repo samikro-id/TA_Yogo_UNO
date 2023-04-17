@@ -73,10 +73,14 @@ DallasTemperature temperature(&oneWire);
 /**
  * @brief SD Card
  * @library SD by Arduino Version 1.2.4
+ *          SdFat by Bill Greimen Version 2.2.2
  */
 #include <SPI.h>
 #include <SD.h>
 File myFile;
+// #include "SdFat.h"
+// SdFat sd;
+// SdFile myFile;
 
 void setup(){
     Serial.begin(115200);
@@ -101,6 +105,85 @@ void setup(){
     /* Temperature DS18B20 Setup */
     temperature.begin();
 
+    /* SD Card Setup */
+    if (!SD.begin(53)) { //tergantung di pin chipselect yang digunakan
+        Serial.println("Gagal baca microSD!");
+        return;
+    }
+    Serial.println("Sukses baca kartu microSD!");
+    
+    if (SD.exists("example.txt")) {
+
+        Serial.println("example.txt exists.");
+
+    } else {
+
+        Serial.println("example.txt doesn't exist.");
+
+    }
+
+    // open a new file and immediately close it:
+
+    Serial.println("Creating example.txt...");
+
+    myFile = SD.open("example.txt", FILE_WRITE);
+
+    myFile.close();
+
+    // Check to see if the file exists:
+
+    if (SD.exists("example.txt")) {
+
+        Serial.println("example.txt exists.");
+
+    } else {
+
+        Serial.println("example.txt doesn't exist.");
+
+    }
+
+    // delete the file:
+
+    // Serial.println("Removing example.txt...");
+
+    // SD.remove("example.txt");
+
+    // if (SD.exists("example.txt")) {
+
+    //     Serial.println("example.txt exists.");
+
+    // } else {
+
+    //     Serial.println("example.txt doesn't exist.");
+
+    // }
+
+    // if (!sd.begin(53, SPI_HALF_SPEED)) sd.initErrorHalt();
+
+    // // open the file for write at end like the Native SD library
+    // if (!myFile.open("test.txt", O_RDWR | O_CREAT | O_AT_END)) {
+    //     sd.errorHalt("opening test.txt for write failed");
+    // }
+    // // if the file opened okay, write to it:
+    // Serial.print("Writing to test.txt...");
+    // myFile.println("testing 1, 2, 3.");
+
+    // // close the file:
+    // myFile.close();
+    // Serial.println("done.");
+
+    // // re-open the file for reading:
+    // if (!myFile.open("test.txt", O_READ)) {
+    //     sd.errorHalt("opening test.txt for read failed");
+    // }
+    // Serial.println("test.txt:");
+
+    // // read from the file until there's nothing else in it:
+    // int data;
+    // while ((data = myFile.read()) >= 0) Serial.write(data);
+    // // close the file:
+    // myFile.close();
+
     /* Relay Setup */
     pinMode(RELAY_1_Pin, OUTPUT);
     pinMode(RELAY_2_Pin, OUTPUT);
@@ -121,8 +204,9 @@ void loop(){
     digitalWrite(RELAY_3_Pin, RELAY_OFF);
     digitalWrite(RELAY_4_Pin, RELAY_OFF);
     float busVoltage = 0;
-    busVoltage = sensor219.getBusVoltage_V();
-
+    busVoltage = energy.getBusVoltage_V();
+    Serial.print(busVoltage);
+    Serial.println(" V");
     
     delay(1000);
 
@@ -131,7 +215,9 @@ void loop(){
     digitalWrite(RELAY_3_Pin, RELAY_OFF);
     digitalWrite(RELAY_4_Pin, RELAY_OFF);
     float current = 0; // Measure in milli amps
-    busVoltage = sensor219.getBusVoltage_V();
+    current = energy.getCurrent_mA();
+    Serial.print(current);
+    Serial.println(" mA");
     delay(1000);
 
     digitalWrite(RELAY_1_Pin, RELAY_OFF);
@@ -140,11 +226,17 @@ void loop(){
     digitalWrite(RELAY_4_Pin, RELAY_OFF);
     float power = 0;
     power = busVoltage * (current/1000); // Calculate the Power
+    Serial.print(power);
+    Serial.println(" W");
     delay(1000);
 
     digitalWrite(RELAY_1_Pin, RELAY_OFF);
     digitalWrite(RELAY_2_Pin, RELAY_OFF);
     digitalWrite(RELAY_3_Pin, RELAY_OFF);
     digitalWrite(RELAY_4_Pin, RELAY_ON);
+    temperature.requestTemperatures();
+    float suhu = temperature.getTempCByIndex(0);
+    Serial.print(suhu);
+    Serial.println(" C");
     delay(1000);
 }
