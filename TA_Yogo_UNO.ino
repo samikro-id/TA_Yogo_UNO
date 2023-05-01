@@ -104,6 +104,14 @@ typedef struct{
     float current;
     float capacity;
     float temperature;
+    float voltage_full;
+    float voltage_empty;
+    float current_full;
+    float temperature_limit;
+    float temperature_release;
+    float capacity_limit;
+    float temperature_max;
+    float state_of_health;
 }SYSTEM_DataTypeDef;
 
 SYSTEM_TimeoutTypeDef timeout;
@@ -111,10 +119,23 @@ SYSTEM_Flag_t flag;
 SYSTEM_DataTypeDef data;
 
 char display_buffer[20];
+char f_str[10];
+char f_str1[10];
 String log_number_str;
+
+typedef struct{
+    String str;
+    bool complete;
+}SYSTEM_CommandTypeDef;
+SYSTEM_CommandTypeDef command;
+
+bool led;
 
 void setup(){
     Serial.begin(115200);
+    Serial1.begin(9600);
+
+    pinMode(LED_BUILTIN, OUTPUT);
 
     /* LCD Setup */
     pinMode(LCD_RW_Pin, OUTPUT);
@@ -148,45 +169,56 @@ void setup(){
     digitalWrite(RELAY_4_Pin, RELAY_OFF);
 
     delay(5000);
+
+    data.voltage_full = 4.0;
+    data.voltage_empty = 2.8;
+    data.current_full = 100;
+    data.temperature_limit = 50;
+    data.temperature_release = 35;
+    data.capacity_limit = 2000;
 }
 
 void loop(){
-    updateSensor();
+    if(command.complete == true){
+        command.complete = false;
+        Serial.println(command.str);
+        processData();
+    }
 
-    if(data.temperature > 50){
-        flag = SYSTEM_OVERTEMP;
-    }
-    else if(data.temperature < 35){
-        flag = SYSTEM_IDLE;
-    }
+    ledBlynk();
+    updateSensor();
 
     if((millis() - timeout.update) > TIMEOUT_UPDATE){
         timeout.update = millis();
 
+        countCapacity();
+        
         if(flag == SYSTEM_CHARGE){
             systemCharge();
-
-            if(data.voltage > 4.2 && data.current < 100){
+            Serial.println("charge");
+            if(data.voltage > data.voltage_full && data.current < data.current_full){
                 dataClear();
                 flag = SYSTEM_LOAD;
             }
         }
         else if(flag == SYSTEM_LOAD){
             systemLoad();
-
-            if(data.voltage < 2.8){
+            Serial.println("Load");
+            if(data.voltage < data.voltage_empty){
                 flag = SYSTEM_FINISH;
             }
         }
         else if(flag == SYSTEM_FINISH){
             systemFinish();
+            Serial.println("Finish");
         }
         else if(flag == SYSTEM_OVERTEMP){
             systemOverTemp();
+            Serial.println("Over Temp");
         }
         else{
             systemIdle();
-
+            // Serial.println("Idle");
             if(data.voltage > 1.0){
                 if((millis() - timeout.detect_batt) > TIMEOUT_DETECT_BATT){
                     createNewLogNumber();
@@ -201,6 +233,8 @@ void loop(){
     }
 
     if(flag == SYSTEM_CHARGE || flag == SYSTEM_LOAD){
+        getSuhuMax();
+
         if((millis() - timeout.save) > TIMEOUT_SAVE){
             timeout.save = millis();
 
@@ -210,21 +244,111 @@ void loop(){
     else{
         timeout.save = millis();
     }
+
+    if(data.temperature > data.temperature_limit){
+        if(flag != SYSTEM_OVERTEMP){
+            flag = SYSTEM_OVERTEMP;
+        }
+    }
+    else if(data.temperature < data.temperature_release){
+        if(flag == SYSTEM_OVERTEMP){
+            flag = SYSTEM_IDLE;
+        } 
+    }
+}
+
+void processData(void){
+    int index, index2, index3;
+
+    index = command.str.indexOf("|");
+
+    if(command.str.substring(0, index) == "GET"){
+        index++;
+        if(command.str.substring(index) == "DATA"){
+            command.str = "";
+            command.str = "DATA|" + String(data.temperature, 0)
+                        + "|" + String(data.voltage, 2) 
+                        + "|" + String(data.current, 0)
+                        + "|" + String(data.capacity, 0)
+                        + "|" + String(flag)
+                        + "|" + String(data.temperature_limit,0)
+                        + "|" + String(data.temperature_release,0)
+                        + "|" + String(data.voltage_full,2)
+                        + "|" + String(data.voltage_empty,2)
+                        + "|" + String(data.current_full,0)
+                        + "|" + String(data.capacity_limit,0)
+                        ;
+
+            Serial.println(command.str);
+            Serial1.println(command.str);
+        }
+    }
+    else if(command.str.substring(0, index) == "SET"){
+        index++;
+        index2 = command.str.indexOf("|", index);
+        if(command.str.substring(index, index2) == "PARAM"){
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.temperature_limit = command.str.substring(index, index2).toFloat();
+
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.temperature_release = command.str.substring(index, index2).toFloat();
+
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.voltage_full = command.str.substring(index, index2).toFloat();
+
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.voltage_empty = command.str.substring(index, index2).toFloat();
+
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.current_full = command.str.substring(index, index2).toFloat();
+
+            index = index2 + 1;
+            index2 = command.str.indexOf("|", index);
+            data.capacity_limit = command.str.substring(index, index2).toFloat();
+
+            command.str = "";
+            command.str = "DATA|" + String(data.temperature, 0)
+                        + "|" + String(data.voltage, 2)
+                        + "|" + String(data.current, 0)
+                        + "|" + String(data.capacity, 0)
+                        + "|" + String(flag)
+                        + "|" + String(data.temperature_limit,0)
+                        + "|" + String(data.temperature_release,0)
+                        + "|" + String(data.voltage_full,2)
+                        + "|" + String(data.voltage_empty,2)
+                        + "|" + String(data.current_full,0)
+                        + "|" + String(data.capacity_limit,0)
+                        ;
+
+            Serial.println(command.str);
+            Serial1.println(command.str);
+        }
+    }
+
+    command.str = "";
 }
 
 void updateSensor(void){
     data.voltage = energy.getBusVoltage_V();
-    Serial.print(data.voltage);     Serial.println(" V");
 
     data.current = energy.getCurrent_mA();       // Measure in milli amps
-    Serial.print(data.current);     Serial.println(" mA");
-
-    data.capacity += data.current / 3600;
-    Serial.print(data.capacity);    Serial.println(" mAh");
+    
+    if(data.current < 0){
+        data.current *= -1;
+    } 
 
     temperature.requestTemperatures();
     data.temperature = temperature.getTempCByIndex(0);
-    Serial.print(data.temperature); Serial.println(" C");
+}
+
+void countCapacity(void){
+    data.capacity += data.current / 3600;
+    // Serial.print(data.capacity);    Serial.println(" mAh");
 }
 
 void systemIdle(void){
@@ -236,8 +360,6 @@ void systemIdle(void){
     lcd.clear();
     lcd.setCursor(0,0);
     lcd.print("Insert Battery");
-    lcd.setCursor(0,1);
-    lcd.print("Press Button");
 }
 
 void systemCharge(void){
@@ -249,10 +371,13 @@ void systemCharge(void){
 
     lcd.clear();
     lcd.setCursor(0,0);
-    sprintf(display_buffer, "Charge %0f C", data.temperature);
+    dtostrf(data.temperature, 2,0, f_str);
+    sprintf(display_buffer, "Charge %s C", f_str);
     lcd.print(display_buffer);
     lcd.setCursor(0,1);
-    sprintf(display_buffer, "%.02f V  %04f mA", data.voltage, data.current);
+    dtostrf(data.voltage, 4,2, f_str);
+    dtostrf(data.current, 4,0, f_str1);
+    sprintf(display_buffer, "%s V  %s mA", f_str, f_str1);
     lcd.print(display_buffer);
 }
 
@@ -265,10 +390,13 @@ void systemLoad(void){
 
     lcd.clear();
     lcd.setCursor(0,0);
-    sprintf(display_buffer, "Load %0f mAh", data.capacity);
+    dtostrf(data.capacity, 4,0, f_str);
+    sprintf(display_buffer, "Load %s mAh", f_str);
     lcd.print(display_buffer);
     lcd.setCursor(0,1);
-    sprintf(display_buffer, "%.02f V  %04f mA", data.voltage, data.current);
+    dtostrf(data.voltage, 4,2, f_str);
+    dtostrf(data.current, 4,0, f_str1);
+    sprintf(display_buffer, "%s V  %s mA", f_str, f_str1);
     lcd.print(display_buffer);
 }
 
@@ -284,7 +412,8 @@ void systemFinish(){
     sprintf(display_buffer, "Finish %d", log);
     lcd.print(display_buffer);
     lcd.setCursor(0,1);
-    sprintf(display_buffer, "Capacity %0f mAh", data.capacity);
+    dtostrf(data.capacity, 4,0, f_str);
+    sprintf(display_buffer, "Capacity %s mAh", f_str);
     lcd.print(display_buffer);
 }
 
@@ -298,11 +427,20 @@ void systemOverTemp(){
     lcd.setCursor(0,0);
     lcd.print("Over Temperature");
     lcd.setCursor(0,1);
-    sprintf(display_buffer, "Temp %0f C", data.temperature);
+    dtostrf(data.temperature, 2,0, f_str);
+    sprintf(display_buffer, "Temp %s C", f_str);
     lcd.print(display_buffer);
 }
 
+void getSuhuMax(void){
+    if(data.temperature > data.temperature_max){
+        data.temperature_max = data.temperature;
+    }
+}
+
 void dataClear(void){
+    data.temperature_max = 0;
+    data.state_of_health = 0;
     data.capacity = 0;
 }
 
@@ -320,7 +458,6 @@ uint16_t getLogNumber(void){
                 log_number_str += a;
             }
             ret = log_number_str.toInt();
-            ret++;
 
             dataFile.close();
         }
@@ -424,9 +561,13 @@ void saveLog(void){
         File dataFile = SD.open(display_buffer, FILE_WRITE);
     
         if (dataFile) {
-            sprintf(display_buffer, "%.02f,%04f", data.voltage, data.current);
+            dtostrf(data.voltage, 4,2, f_str);
+            dtostrf(data.current, 4,0, f_str1);
+            sprintf(display_buffer, "%s,%s,", f_str, f_str1);
             dataFile.print(display_buffer);
-            sprintf(display_buffer, "%04f,%02f", data.capacity, data.temperature);
+            dtostrf(data.capacity, 4,0, f_str);
+            dtostrf(data.temperature, 2,0, f_str1);
+            sprintf(display_buffer, "%s,%s", f_str, f_str1);
             dataFile.println(display_buffer);
             dataFile.close();
         }
@@ -440,4 +581,31 @@ void saveLog(void){
     }
 
     SD.end();
+}
+
+void serialEvent1(void){
+    while(Serial1.available()){
+        char inChar = (char) Serial1.read();
+
+        if(inChar == '\n'){
+            command.complete = true;
+            break;
+        }
+        else if(inChar == '\r'){
+        }
+        else{
+            command.str += inChar;
+        }
+    }
+}
+
+void ledBlynk(void){
+    if(led == true){
+        digitalWrite(LED_BUILTIN, LOW);
+        led = false;
+    }
+    else{
+        digitalWrite(LED_BUILTIN, HIGH);
+        led = true;
+    }
 }
