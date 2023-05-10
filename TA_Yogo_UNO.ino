@@ -285,8 +285,8 @@ void setup(){
     data.temperature_release = 35;
     data.capacity_limit = 2000;
 
-    data.capacity_percent = 77;
-    data.temperature_max = 20;
+    data.capacity = 2000;
+    data.temperature_max = 32;
 
     fuzzyProcess();
     Serial.println("SoH");
@@ -577,37 +577,66 @@ void fuzzyTrapesium(MEMBERSHIP_TrapesiumTypeDef *val, float setpoint){
 }
 
 void fuzzyProcess(void){
-    data.capacity_percent = (data.capacity / data.capacity_limit) * 100;
+    Serial.println("Fuzzy");
+    if(data.capacity > data.capacity_limit){
+        data.capacity_percent = 100;
+    }
+    else{
+        data.capacity_percent = (data.capacity / data.capacity_limit) * 100;
+    }
+    Serial.println(data.capacity_percent);
+    Serial.println(data.temperature_max);
 
+    Serial.println("Membership");
     fuzzyTrapesium(&fuzzy.kapasitas.low, data.capacity_percent);
+    Serial.println(fuzzy.kapasitas.low.level);
     fuzzyTrapesium(&fuzzy.kapasitas.medium, data.capacity_percent);
+    Serial.println(fuzzy.kapasitas.medium.level);
     fuzzyTrapesium(&fuzzy.kapasitas.high, data.capacity_percent);
+    Serial.println(fuzzy.kapasitas.high.level);
 
     fuzzyTrapesium(&fuzzy.suhu.dingin, data.temperature_max);
+    Serial.println(fuzzy.suhu.dingin.level);
     fuzzyTrapesium(&fuzzy.suhu.normal, data.temperature_max);
+    Serial.println(fuzzy.suhu.normal.level);
     fuzzyTrapesium(&fuzzy.suhu.panas, data.temperature_max);
+    Serial.println(fuzzy.suhu.panas.level);
 
+    Serial.println("Conjunction");
     float ruleRusak1 = fuzzyConjunction(fuzzy.kapasitas.low, fuzzy.suhu.panas);
+    Serial.println(ruleRusak1);
     float ruleRusak2 = fuzzyConjunction(fuzzy.kapasitas.medium, fuzzy.suhu.panas);
+    Serial.println(ruleRusak2);
     float ruleRusak3 = fuzzyConjunction(fuzzy.kapasitas.high, fuzzy.suhu.panas);
+    Serial.println(ruleRusak3);
 
     float ruleLemah1 = fuzzyConjunction(fuzzy.kapasitas.low, fuzzy.suhu.dingin);
+    Serial.println(ruleLemah1);
     float ruleLemah2 = fuzzyConjunction(fuzzy.kapasitas.low, fuzzy.suhu.normal);
+    Serial.println(ruleLemah2);
     float ruleLemah3 = fuzzyConjunction(fuzzy.kapasitas.medium, fuzzy.suhu.dingin);
+    Serial.println(ruleLemah3);
     float ruleLemah4 = fuzzyConjunction(fuzzy.kapasitas.medium, fuzzy.suhu.normal);
+    Serial.println(ruleLemah4);
 
     float ruleBagus1 = fuzzyConjunction(fuzzy.kapasitas.high, fuzzy.suhu.dingin);
+    Serial.println(ruleBagus1);
     float ruleBagus2 = fuzzyConjunction(fuzzy.kapasitas.high, fuzzy.suhu.normal);
+    Serial.println(ruleBagus2);
 
+    Serial.println("Disjunction");
     fuzzy.soh.rusak.level = fuzzyDisjuntion(ruleRusak1, ruleRusak2);
     fuzzy.soh.rusak.level = fuzzyDisjuntion(ruleRusak2, fuzzy.soh.rusak.level);
+    Serial.println(fuzzy.soh.rusak.level);
 
     fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah1, ruleLemah2);
     fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah2, fuzzy.soh.rusak.level);
     fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah3, fuzzy.soh.rusak.level);
     fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah4, fuzzy.soh.rusak.level);
+    Serial.println(fuzzy.soh.lemah.level);
 
     fuzzy.soh.bagus.level = fuzzyDisjuntion(ruleBagus1, ruleBagus2);
+    Serial.println(fuzzy.soh.bagus.level);
 
     fuzzy.cog.pembilang = 0;
     fuzzy.cog.penyebut = 0;
