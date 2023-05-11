@@ -89,14 +89,14 @@ File myFile;
 #define TIMEOUT_UPDATE          1000    // ms
 #define TIMEOUT_DETECT_BATT     2000    // ms
 #define TIMEOUT_SAVE            60000   // ms
-#define TIMEOUT_DISPLAY_TITLE   2000    //
-#define TIMEOUT_DISPLAY_DATA    5000    //
+#define TIMEOUT_DISPLAY_TITLE   3000    //
+#define TIMEOUT_DISPLAY_DATA    10000    //
 typedef struct{
     uint32_t update;
     uint32_t detect_batt;
     uint32_t button;
     uint32_t save;
-    uint32_t display,
+    uint32_t display;
 }SYSTEM_TimeoutTypeDef;
 
 typedef enum{
@@ -195,7 +195,7 @@ void ISR_BUTTON(void){
     while(bounce < 100){
         if(digitalRead(BUTTON_PIN) == LOW){
             bounce++;
-            Delay(1);
+            delay(1);
         }
         else{
             break;
@@ -207,11 +207,11 @@ void ISR_BUTTON(void){
 
         if(flag == SYSTEM_IDLE){
             flag = SYSTEM_START;
-            timeout.display = milliS();
+            timeout.display = millis();
         }
         else if(flag == SYSTEM_FINISH || flag == SYSTEM_OVERTEMP){
             flag = SYSTEM_IDLE;
-            timeout.display = milliS();
+            timeout.display = millis();
         }
     }
     else{
@@ -224,6 +224,7 @@ void setup(){
     Serial1.begin(9600);
 
     pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), ISR_BUTTON, FALLING);
 
     /* LCD Setup */
@@ -330,6 +331,10 @@ void setup(){
     fuzzyProcess();
     Serial.println("SoH");
     Serial.println(data.state_of_health);
+
+    dataClear();
+
+    flag = SYSTEM_IDLE;
 }
 
 void loop(){
@@ -371,11 +376,15 @@ void loop(){
             digitalWrite(RELAY_CHARGE_BATT, RELAY_ON);
             digitalWrite(RELAY_CHARGE_SUPPLY, RELAY_ON);
 
+            /* Count Capacity */
+            data.capacity += data.current / 3600;
+
             if(data.voltage > data.voltage_full && data.current < data.current_full){
+                dataClear();
                 flag = SYSTEM_LOAD;
             }
 
-            if((millis() - timoeut.display) < TIMEOUT_DISPLAY_TITLE){
+            if((millis() - timeout.display) < TIMEOUT_DISPLAY_TITLE){
                 displayTitle("Charge");
             }
             else if((millis() - timeout.display) < TIMEOUT_DISPLAY_DATA){
@@ -400,7 +409,7 @@ void loop(){
                 flag = SYSTEM_FINISH;
             }
 
-            if((millis() - timoeut.display) < TIMEOUT_DISPLAY_TITLE){
+            if((millis() - timeout.display) < TIMEOUT_DISPLAY_TITLE){
                 displayTitle("Load");
             }
             else if((millis() - timeout.display) < TIMEOUT_DISPLAY_DATA){
@@ -419,7 +428,7 @@ void loop(){
 
             fuzzyProcess();
 
-            if((millis() - timoeut.display) < TIMEOUT_DISPLAY_TITLE){
+            if((millis() - timeout.display) < TIMEOUT_DISPLAY_TITLE){
                 if(flag == SYSTEM_OVERTEMP){
                     displayTitle("Over Temp");
 
@@ -511,11 +520,15 @@ void loop(){
 }
 
 void displayTitle(String title){
-    lcd.clear();
-    lcd.setCursor((16-title.length()) / 2,0);
+    if(title.length() <= 16){
+        uint8_t cursor = (16-title.length()) / 2;
 
-    sprintf(display_buffer, "%s", title);
-    lcd.print(display_buffer);
+        lcd.clear();
+        lcd.setCursor(cursor,0);
+
+        title.toCharArray(display_buffer, 16);
+        lcd.print(display_buffer);
+    }
 }
 
 void displayData(void){
