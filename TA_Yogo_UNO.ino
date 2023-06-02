@@ -209,6 +209,9 @@ void ISR_BUTTON(void){
             flag = SYSTEM_START;
             timeout.display = millis();
         }
+        else if(flag == SYSTEM_START){
+            flag = SYSTEM_IDLE;
+        }
         else if(flag == SYSTEM_FINISH || flag == SYSTEM_OVERTEMP){
             flag = SYSTEM_IDLE;
             timeout.display = millis();
@@ -325,12 +328,10 @@ void setup(){
     data.temperature_release = 35;
     data.capacity_limit = 2000;
 
-    data.capacity = 2000;
+    data.capacity = 239;
     data.temperature_max = 32;
 
     fuzzyProcess();
-    Serial.println("SoH");
-    Serial.println(data.state_of_health);
 
     dataClear();
 
@@ -448,7 +449,8 @@ void loop(){
             else if((millis() - timeout.display) < TIMEOUT_DISPLAY_DATA){
                 lcd.clear();
                 lcd.setCursor(0,0);
-                sprintf(display_buffer, "SoH %d", data.state_of_health);
+                dtostrf(data.state_of_health, 2,1, f_str);
+                sprintf(display_buffer, "SoH %s", f_str);
                 lcd.print(display_buffer);
 
                 lcd.setCursor(0,1);
@@ -469,10 +471,19 @@ void loop(){
             }
         }
         else if(flag == SYSTEM_START){
-            createNewLogNumber();
-            createNewLog();
-            dataClear();
-            flag = SYSTEM_CHARGE;
+            if(data.voltage > 1.0){
+                displayTitle("Baterai Terdeteksi");
+                if((millis() - timeout.detect_batt) > TIMEOUT_DETECT_BATT){
+                    createNewLogNumber();
+                    createNewLog();
+                    dataClear();
+                    flag = SYSTEM_CHARGE;
+                }
+            }
+            else{
+                displayTitle("Pasang Baterai");
+                timeout.detect_batt = millis();
+            }
         }
         else{
             digitalWrite(RELAY_BATT, RELAY_OFF);
@@ -480,19 +491,7 @@ void loop(){
             digitalWrite(RELAY_CHARGE_SUPPLY, RELAY_OFF);
             digitalWrite(RELAY_LOAD, RELAY_OFF);
 
-            displayTitle("Insert Battery");
-
-            // if(data.voltage > 1.0){
-            //     if((millis() - timeout.detect_batt) > TIMEOUT_DETECT_BATT){
-            //         createNewLogNumber();
-            //         createNewLog();
-            //         dataClear();
-            //         flag = SYSTEM_CHARGE;
-            //     }
-            // }
-            // else{
-            //     timeout.detect_batt = millis();
-            // }
+            displayTitle("Press Button");
         }
     }
 
@@ -709,9 +708,9 @@ void fuzzyProcess(void){
     Serial.println(fuzzy.soh.rusak.level);
 
     fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah1, ruleLemah2);
-    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah2, fuzzy.soh.rusak.level);
-    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah3, fuzzy.soh.rusak.level);
-    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah4, fuzzy.soh.rusak.level);
+    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah2, fuzzy.soh.lemah.level);
+    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah3, fuzzy.soh.lemah.level);
+    fuzzy.soh.lemah.level = fuzzyDisjuntion(ruleLemah4, fuzzy.soh.lemah.level);
     Serial.println(fuzzy.soh.lemah.level);
 
     fuzzy.soh.bagus.level = fuzzyDisjuntion(ruleBagus1, ruleBagus2);
@@ -727,6 +726,9 @@ void fuzzyProcess(void){
     fuzzy.cog.penyebut =    (fuzzy.soh.rusak.level * 4) + (fuzzy.soh.lemah.level * 3) + (fuzzy.soh.bagus.level * 3);
     
     data.state_of_health = fuzzy.cog.pembilang / fuzzy.cog.penyebut;
+
+    Serial.println("SoH");
+    Serial.println(data.state_of_health);
 }
 
 uint16_t getLogNumber(void){
